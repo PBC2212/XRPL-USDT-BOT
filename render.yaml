@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: xrpl-real-estate-bot
+    env: node
+    buildCommand: npm install --production
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: XRPL_NETWORK
+        value: wss://xrplcluster.com
+      - key: DEBUG_MODE
+        value: false
+      - key: CHECK_INTERVAL_SECONDS
+        value: 60
+      - key: MAX_RETRIES
+        value: 3
+      - key: ORACLE_ENABLED
+        value: false
+      - key: FIREBLOCKS_ENABLED
+        value: false
+      - key: ENABLE_COMPLIANCE_REPORTING
+        value: true
+      - key: LOG_LEVEL
+        value: info
+    plan: starter

@@ -1,13 +1,27 @@
 {
-  "name": "xrpl-usdt-bot",
+  "name": "xrpl-real-estate-bot",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Enterprise XRPL Real Estate Token Bot with Instant Swap Support",
+  "main": "enterpriseBot.js",
   "scripts": {
+    "start": "node enterpriseBot.js",
+    "build": "npm install",
+    "dev": "node enterpriseBot.js",
+    "simple": "node usdtOfferBot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "engines": {
+    "node": "18.x"
+  },
+  "keywords": [
+    "xrpl",
+    "real-estate", 
+    "tokenization",
+    "defi",
+    "instant-swap",
+    "enterprise"
+  ],
+  "author": "Real Estate Tokenization Platform",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
