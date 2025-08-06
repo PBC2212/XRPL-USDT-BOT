@@ -1,8 +1,8 @@
 /**
- * enterpriseBot.js - Production-Grade Enterprise Real Estate Token Bot
+ * enterpriseBot.js - Enterprise Real Estate Token Bot
  * 
- * Complete institutional platform integrating XRPL trading, Oracle price feeds, 
- * Fireblocks custody, instant swap support, and comprehensive compliance reporting.
+ * Main bot that integrates XRPL trading, Oracle price feeds, and Fireblocks custody
+ * to create a complete institutional-grade tokenized real estate platform.
  */
 
 const xrpl = require('xrpl');
@@ -37,7 +37,6 @@ class EnterpriseRealEstateBot {
         this.totalOffersCreated = 0;
         this.lastOfferHash = null;
         this.currentPrice = null;
-        this.lastSwapTime = null;
         
         // Enterprise Components
         this.oracleManager = null;
@@ -51,7 +50,6 @@ class EnterpriseRealEstateBot {
             priceUpdates: 0,
             custodyChecks: 0,
             complianceReports: 0,
-            instantSwaps: 0,
             errors: 0
         };
     }
@@ -183,7 +181,6 @@ class EnterpriseRealEstateBot {
         console.log(`   Oracle: ${process.env.ORACLE_ENABLED === 'true' ? 'ENABLED' : 'DISABLED'}`);
         console.log(`   Fireblocks: ${process.env.FIREBLOCKS_ENABLED === 'true' ? 'ENABLED' : 'DISABLED'}`);
         console.log(`   Compliance: ${process.env.ENABLE_COMPLIANCE_REPORTING === 'true' ? 'ENABLED' : 'DISABLED'}`);
-        console.log(`   Instant Swaps: ENABLED`);
         console.log(`   Debug mode: ${this.debugMode ? 'ON' : 'OFF'}`);
     }
 
@@ -275,15 +272,12 @@ class EnterpriseRealEstateBot {
     }
 
     /**
-     * Check and maintain XRPL offers with instant swap support
+     * Check and maintain XRPL offers
      */
     async checkAndMaintainOffers() {
         await this.ensureConnection();
         
         console.log(`[${new Date().toISOString()}] Checking offers...`);
-        
-        // Check for instant swaps first
-        await this.monitorInstantSwaps();
         
         // Get current offers
         const offers = await this.getAccountOffers();
@@ -295,252 +289,8 @@ class EnterpriseRealEstateBot {
                 this.logOfferDetails(targetOffer);
             }
         } else {
-            console.log('❌ Target offer not found - creating new instant-swap enabled offer');
-            await this.createInstantSwapOffer();
-        }
-    }
-
-    /**
-     * Create instant swap enabled offer
-     */
-    async createInstantSwapOffer() {
-        try {
-            console.log('⚡ Creating instant-swap enabled offer...');
-            
-            // Use current price if available from oracle
-            const currentUSDTAmount = this.currentPrice ? 
-                (parseFloat(this.rlaAmount) * this.currentPrice).toString() : 
-                this.usdtAmount;
-            
-            const transaction = {
-                TransactionType: 'OfferCreate',
-                Account: this.wallet.address,
-                TakerGets: {
-                    currency: this.tokenCode,
-                    issuer: this.wallet.address,
-                    value: this.rlaAmount
-                },
-                TakerPays: {
-                    currency: this.usdtTokenCode,
-                    issuer: this.usdtIssuer,
-                    value: currentUSDTAmount
-                },
-                // No special flags - this allows both instant swaps AND order book placement
-                Flags: 0
-            };
-            
-            if (this.debugMode) {
-                console.log('🔍 Instant-swap transaction details:', JSON.stringify(transaction, null, 2));
-            }
-            
-            const prepared = await this.client.autofill(transaction);
-            const signed = this.wallet.sign(prepared);
-            const result = await this.client.submitAndWait(signed.tx_blob);
-            
-            if (result.result.meta.TransactionResult === 'tesSUCCESS') {
-                this.totalOffersCreated++;
-                this.stats.totalOffers++;
-                this.lastOfferHash = result.result.hash;
-                
-                console.log('🎉 Instant-swap offer created successfully!');
-                console.log(`   📊 Transaction: ${result.result.hash}`);
-                console.log(`   💼 Selling: ${this.rlaAmount} ${this.tokenCode}`);
-                console.log(`   💰 For: ${currentUSDTAmount} ${this.usdtTokenCode}`);
-                console.log(`   ⚡ Instant swap: ENABLED`);
-                console.log(`   📈 Rate: ${(parseFloat(currentUSDTAmount) / parseFloat(this.rlaAmount)).toFixed(6)}`);
-                console.log(`   🎯 Total offers created: ${this.totalOffersCreated}`);
-                
-                // Log LP instructions on first offer
-                if (this.totalOffersCreated === 1) {
-                    this.displayLPInstructions();
-                }
-                
-            } else {
-                throw new Error(`Transaction failed: ${result.result.meta.TransactionResult}`);
-            }
-            
-        } catch (error) {
-            console.error('💥 Failed to create instant-swap offer:', error.message);
-            throw error;
-        }
-    }
-
-    /**
-     * Monitor for instant swap transactions
-     */
-    async monitorInstantSwaps() {
-        try {
-            // Get recent transactions to detect instant swaps
-            const transactions = await this.client.request({
-                command: 'account_tx',
-                account: this.wallet.address,
-                limit: 5,
-                ledger_index_min: -1,
-                ledger_index_max: -1
-            });
-            
-            for (const tx of transactions.result.transactions) {
-                if (this.isRecentSwapTransaction(tx)) {
-                    await this.handleDetectedSwap(tx);
-                }
-            }
-            
-        } catch (error) {
-            // Don't log errors for this - it's optional monitoring
-            if (this.debugMode) {
-                console.warn('⚠️ Instant swap monitoring:', error.message);
-            }
-        }
-    }
-
-    /**
-     * Check if transaction is a recent swap of our tokens
-     */
-    isRecentSwapTransaction(tx) {
-        try {
-            const meta = tx.meta;
-            const transaction = tx.transaction;
-            
-            // Check if it's a successful transaction within the last 5 minutes
-            const txTime = new Date((transaction.date + 946684800) * 1000); // XRPL epoch to JS epoch
-            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-            
-            if (txTime < fiveMinutesAgo) {
-                return false;
-            }
-            
-            // Check if our tokens were involved in the transaction
-            if (meta && meta.AffectedNodes) {
-                for (const node of meta.AffectedNodes) {
-                    if (node.DeletedNode && node.DeletedNode.LedgerEntryType === 'Offer') {
-                        const offer = node.DeletedNode.PreviousFields || node.DeletedNode.FinalFields;
-                        if (offer && offer.Account === this.wallet.address) {
-                            return true;
-                        }
-                    }
-                    if (node.ModifiedNode && node.ModifiedNode.LedgerEntryType === 'RippleState') {
-                        const balance = node.ModifiedNode.FinalFields || node.ModifiedNode.PreviousFields;
-                        if (balance && balance.Balance && 
-                            (balance.Balance.currency === this.tokenCode || 
-                             balance.Balance.currency === this.usdtTokenCode)) {
-                            return true;
-                        }
-                    }
-                }
-            }
-            
-            return false;
-            
-        } catch (error) {
-            return false;
-        }
-    }
-
-    /**
-     * Handle detected swap transaction
-     */
-    async handleDetectedSwap(tx) {
-        console.log('⚡ INSTANT SWAP DETECTED!');
-        console.log(`   📊 Transaction: ${tx.transaction.hash}`);
-        console.log(`   ⏰ Time: ${new Date().toISOString()}`);
-        console.log(`   💱 Swap executed - tokens transferred to LP`);
-        
-        // Increment swap counter
-        this.stats.instantSwaps++;
-        this.lastSwapTime = new Date();
-        
-        // Log for compliance
-        this.logSwapForCompliance(tx);
-        
-        console.log(`   🔄 Total instant swaps: ${this.stats.instantSwaps}`);
-    }
-
-    /**
-     * Display LP instructions for instant swaps
-     */
-    displayLPInstructions() {
-        console.log('\n💡 LP INSTANT SWAP INSTRUCTIONS:');
-        console.log('================================');
-        console.log('   📱 XUMM Wallet: Use "Exchange" → "Quick Swap"');
-        console.log('   💎 Sologenic DEX: Click "Instant Swap" button');
-        console.log('   🛠️ XRP Toolkit: Use "Exchange" → "Market Order"');
-        console.log('   🔍 Bithomp: Click "Accept Offer" for instant execution');
-        console.log('   ⚡ XRPL API: Use OfferCreate with your offer accepting ours');
-        console.log('   🌐 Any XRPL DEX: Look for "Market Order" or "Accept Offer" options');
-        console.log('');
-        console.log('   🎯 Current Offer: Accept our offer to instantly swap');
-        console.log(`   💰 Rate: ${(parseFloat(this.usdtAmount) / parseFloat(this.rlaAmount)).toFixed(6)} USDT per RLA`);
-        console.log('   ⚡ Execution: 3-5 seconds on XRPL');
-        console.log('================================\n');
-    }
-
-    /**
-     * Log swap for compliance reporting
-     */
-    logSwapForCompliance(tx) {
-        const swapData = {
-            timestamp: new Date().toISOString(),
-            transactionHash: tx.transaction.hash,
-            type: 'TOKEN_SWAP',
-            account: tx.transaction.Account,
-            ledgerIndex: tx.ledger_index,
-            fee: tx.transaction.Fee,
-            tokenCode: this.tokenCode,
-            rlaAmount: this.rlaAmount,
-            usdtAmount: this.usdtAmount
-        };
-        
-        // Store in compliance log
-        if (this.debugMode) {
-            console.log('📋 Compliance swap log:', JSON.stringify(swapData, null, 2));
-        }
-        
-        // Write to log file
-        this.writeSwapLog(swapData);
-    }
-
-    /**
-     * Write swap log to file
-     */
-    async writeSwapLog(swapData) {
-        try {
-            const fs = require('fs').promises;
-            const path = require('path');
-            
-            const logDir = './logs';
-            const logFile = path.join(logDir, 'instant_swaps.json');
-            
-            // Ensure logs directory exists
-            try {
-                await fs.mkdir(logDir, { recursive: true });
-            } catch (e) {
-                // Directory might already exist
-            }
-            
-            // Read existing logs or create empty array
-            let logs = [];
-            try {
-                const existingData = await fs.readFile(logFile, 'utf8');
-                logs = JSON.parse(existingData);
-            } catch (e) {
-                // File doesn't exist yet
-            }
-            
-            // Add new log entry
-            logs.push(swapData);
-            
-            // Keep only last 100 entries
-            if (logs.length > 100) {
-                logs = logs.slice(-100);
-            }
-            
-            // Write back to file
-            await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
-            
-        } catch (error) {
-            if (this.debugMode) {
-                console.warn('⚠️ Could not write swap log:', error.message);
-            }
+            console.log('❌ Target offer not found - creating new offer');
+            await this.createOffer();
         }
     }
 
@@ -601,10 +351,60 @@ class EnterpriseRealEstateBot {
     }
 
     /**
-     * Create new XRPL offer (fallback method)
+     * Create new XRPL offer
      */
     async createOffer() {
-        return await this.createInstantSwapOffer();
+        try {
+            console.log('📝 Creating new RLA/USDT offer...');
+            
+            // Use current price if available from oracle
+            const currentUSDTAmount = this.currentPrice ? 
+                (parseFloat(this.rlaAmount) * this.currentPrice).toString() : 
+                this.usdtAmount;
+            
+            const transaction = {
+                TransactionType: 'OfferCreate',
+                Account: this.wallet.address,
+                TakerGets: {
+                    currency: this.tokenCode,
+                    issuer: this.wallet.address,
+                    value: this.rlaAmount
+                },
+                TakerPays: {
+                    currency: this.usdtTokenCode,
+                    issuer: this.usdtIssuer,
+                    value: currentUSDTAmount
+                }
+            };
+            
+            if (this.debugMode) {
+                console.log('🔍 Transaction details:', JSON.stringify(transaction, null, 2));
+            }
+            
+            const prepared = await this.client.autofill(transaction);
+            const signed = this.wallet.sign(prepared);
+            const result = await this.client.submitAndWait(signed.tx_blob);
+            
+            if (result.result.meta.TransactionResult === 'tesSUCCESS') {
+                this.totalOffersCreated++;
+                this.stats.totalOffers++;
+                this.lastOfferHash = result.result.hash;
+                
+                console.log('🎉 Offer created successfully!');
+                console.log(`   📊 Transaction: ${result.result.hash}`);
+                console.log(`   💼 Selling: ${this.rlaAmount} ${this.tokenCode}`);
+                console.log(`   💰 For: ${currentUSDTAmount} ${this.usdtTokenCode}`);
+                console.log(`   📈 Rate: ${(parseFloat(currentUSDTAmount) / parseFloat(this.rlaAmount)).toFixed(6)}`);
+                console.log(`   🎯 Total offers created: ${this.totalOffersCreated}`);
+                
+            } else {
+                throw new Error(`Transaction failed: ${result.result.meta.TransactionResult}`);
+            }
+            
+        } catch (error) {
+            console.error('💥 Failed to create offer:', error.message);
+            throw error;
+        }
     }
 
     /**
@@ -626,7 +426,7 @@ class EnterpriseRealEstateBot {
                 
                 // Cancel existing offers and create new ones with updated price
                 await this.cancelAllOffers();
-                await this.createInstantSwapOffer();
+                await this.createOffer();
                 
                 console.log('✅ Price update completed');
             } else {
@@ -670,30 +470,6 @@ class EnterpriseRealEstateBot {
         } catch (error) {
             console.warn('⚠️ Error cancelling offers:', error.message);
         }
-    }
-
-    /**
-     * Get instant swap statistics
-     */
-    getInstantSwapStats() {
-        return {
-            totalSwaps: this.stats.instantSwaps,
-            averageSwapsPerHour: this.calculateSwapRate(),
-            lastSwapTime: this.lastSwapTime?.toISOString() || null,
-            swapLogFile: './logs/instant_swaps.json'
-        };
-    }
-
-    /**
-     * Calculate swap rate
-     */
-    calculateSwapRate() {
-        if (!this.stats.startTime || !this.stats.instantSwaps) {
-            return 0;
-        }
-        
-        const hoursRunning = (Date.now() - this.stats.startTime.getTime()) / (1000 * 60 * 60);
-        return Math.round((this.stats.instantSwaps / hoursRunning) * 100) / 100;
     }
 
     /**
@@ -776,8 +552,7 @@ class EnterpriseRealEstateBot {
             statistics: {
                 ...this.stats,
                 currentPrice: this.currentPrice,
-                lastOfferHash: this.lastOfferHash,
-                instantSwaps: this.getInstantSwapStats()
+                lastOfferHash: this.lastOfferHash
             }
         };
     }
@@ -832,13 +607,7 @@ class EnterpriseRealEstateBot {
         console.log(`   📈 Price updates: ${this.stats.priceUpdates}`);
         console.log(`   🏦 Custody checks: ${this.stats.custodyChecks}`);
         console.log(`   📋 Compliance reports: ${this.stats.complianceReports}`);
-        console.log(`   ⚡ Instant swaps: ${this.stats.instantSwaps}`);
         console.log(`   ❌ Errors: ${this.stats.errors}`);
-        
-        if (this.stats.instantSwaps > 0) {
-            console.log(`   💱 Swap rate: ${this.calculateSwapRate()} per hour`);
-            console.log(`   🕒 Last swap: ${this.lastSwapTime?.toISOString() || 'None'}`);
-        }
         
         console.log('\n✅ Enterprise Real Estate Token Bot shutdown complete');
     }
@@ -848,79 +617,6 @@ class EnterpriseRealEstateBot {
      */
     sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    /**
-     * Get trading performance metrics
-     */
-    getTradingMetrics() {
-        const uptime = this.stats.startTime ? Date.now() - this.stats.startTime.getTime() : 0;
-        const uptimeHours = uptime / (1000 * 60 * 60);
-        
-        return {
-            totalOffers: this.stats.totalOffers,
-            instantSwaps: this.stats.instantSwaps,
-            swapRate: this.calculateSwapRate(),
-            offersPerHour: uptimeHours > 0 ? (this.stats.totalOffers / uptimeHours).toFixed(2) : 0,
-            errorRate: this.stats.errors > 0 ? ((this.stats.errors / this.stats.totalOffers) * 100).toFixed(2) + '%' : '0%',
-            uptime: this.formatUptime(uptime),
-            currentPrice: this.currentPrice,
-            tokenCode: this.tokenCode,
-            network: this.xrplNetwork.includes('altnet') ? 'Testnet' : 'Mainnet'
-        };
-    }
-
-    /**
-     * Generate trading summary report
-     */
-    generateTradingSummary() {
-        const metrics = this.getTradingMetrics();
-        
-        return `
-🏆 TRADING PERFORMANCE SUMMARY
-===============================
-Token: ${this.rlaAmount} ${this.tokenCode} → ${this.usdtAmount} ${this.usdtTokenCode}
-Network: ${metrics.network}
-Uptime: ${metrics.uptime}
-
-📊 METRICS:
-- Offers Created: ${metrics.totalOffers}
-- Instant Swaps: ${metrics.instantSwaps}
-- Swap Rate: ${metrics.swapRate}/hour
-- Error Rate: ${metrics.errorRate}
-- Current Price: ${metrics.currentPrice?.toFixed(4) || 'N/A'}
-
-⚡ INSTANT SWAP STATUS: ${this.stats.instantSwaps > 0 ? 'ACTIVE' : 'READY'}
-🏦 CUSTODY: ${this.custodyManager ? 'MONITORED' : 'DISABLED'}
-🔮 ORACLE: ${this.oracleManager ? 'ACTIVE' : 'DISABLED'}
-📋 COMPLIANCE: ${this.complianceReporter ? 'REPORTING' : 'DISABLED'}
-
-🎯 System Status: ${this.isRunning ? 'RUNNING' : 'STOPPED'}
-===============================
-        `.trim();
-    }
-
-    /**
-     * API endpoint for external status checks
-     */
-    getApiStatus() {
-        return {
-            status: this.isRunning ? 'online' : 'offline',
-            version: '1.0.0',
-            features: {
-                instantSwaps: true,
-                oracleIntegration: process.env.ORACLE_ENABLED === 'true',
-                fireblocksIntegration: process.env.FIREBLOCKS_ENABLED === 'true',
-                complianceReporting: process.env.ENABLE_COMPLIANCE_REPORTING === 'true'
-            },
-            trading: this.getTradingMetrics(),
-            health: {
-                xrplConnected: this.client && this.client.isConnected(),
-                consecutiveErrors: this.consecutiveErrors,
-                lastError: this.stats.errors > 0 ? 'Check logs for details' : null
-            },
-            timestamp: new Date().toISOString()
-        };
     }
 }
 
@@ -939,23 +635,6 @@ process.on('SIGTERM', async () => {
     process.exit(0);
 });
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-    if (global.enterpriseBot) {
-        global.enterpriseBot.stats.errors++;
-    }
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-    console.error('💥 Uncaught Exception:', error);
-    if (global.enterpriseBot) {
-        global.enterpriseBot.stats.errors++;
-    }
-    process.exit(1);
-});
-
 // Main execution
 async function main() {
     try {
@@ -972,10 +651,7 @@ async function main() {
 
 // Run the bot
 if (require.main === module) {
-    main().catch(error => {
-        console.error('💥 Fatal error:', error.message);
-        process.exit(1);
-    });
+    main().catch(console.error);
 }
 
 module.exports = EnterpriseRealEstateBot;
