@@ -1,0 +1,99 @@
+{
+  "executiveSummary": {
+    "reportId": "RPT-2025-08-06T02-35-22-186Z-7v0qsn",
+    "period": {
+      "start": "2025-08-05T02:35:22.185Z",
+      "end": "2025-08-06T02:35:22.185Z"
+    },
+    "propertyValue": 1008107.4890052358,
+    "custodyStatus": "ACTIVE",
+    "complianceScore": "A+",
+    "riskLevel": "LOW",
+    "issuesIdentified": 0,
+    "recommendedActions": 0
+  },
+  "detailedFindings": {
+    "property": {
+      "currentValuation": 1008107.4890052358,
+      "valuationConfidence": 0.85,
+      "sources": [
+        {
+          "source": "Zillow (Mock)",
+          "value": 995000
+        },
+        {
+          "source": "CoreLogic (Mock)",
+          "value": 1005000
+        }
+      ],
+      "lastUpdate": "2025-08-06T02:35:22.186Z",
+      "priceStability": "VERY_STABLE"
+    },
+    "custody": {
+      "provider": "Fireblocks (Mock)",
+      "vaultStatus": "ACTIVE",
+      "assetsUnderManagement": [
+        {
+          "assetId": "XRP",
+          "balance": {
+            "total": "1000000"
+          }
+        }
+      ],
+      "complianceScore": "A+",
+      "securityCertifications": [
+        "SOC2",
+        "ISO27001",
+        "SOX"
+      ]
+    },
+    "trading": {
+      "volume24h": 133340,
+      "activeOffers": 5,
+      "priceRange": {
+        "min": 9.95,
+        "max": 10.05
+      },
+      "liquidityScore": 82
+    },
+    "compliance": {
+      "overallScore": "A+",
+      "regulatoryCompliant": true,
+      "kycCompliance": "COMPLETE",
+      "amlCompliance": "COMPLIANT",
+      "transactionMonitoring": "ACTIVE",
+      "dataRetention": "COMPLIANT",
+      "auditReadiness": "READY",
+      "lastComplianceReview": "2025-08-06T02:35:22.187Z",
+      "nextReviewDue": "2025-11-04T02:35:22.187Z"
+    },
+    "riskAssessment": {
+      "level": "LOW",
+      "score": 85,
+      "issues": [],
+      "recommendations": [],
+      "lastAssessment": "2025-08-06T02:35:22.188Z",
+      "nextAssessmentDue": "2025-09-05T02:35:22.188Z"
+    }
+  },
+  "auditTrail": {
+    "transactionCount": 56,
+    "botOperations": 65,
+    "oracleUpdates": 13,
+    "custodyChecks": 29,
+    "period": {
+      "start": "2025-08-05T02:35:22.188Z",
+      "end": "2025-08-06T02:35:22.188Z"
+    }
+  },
+  "metadata": {
+    "id": "RPT-2025-08-06T02-35-22-186Z-7v0qsn",
+    "type": "DAILY_COMPLIANCE",
+    "generatedAt": "2025-08-06T02:35:22.185Z",
+    "period": {
+      "start": "2025-08-05T02:35:22.185Z",
+      "end": "2025-08-06T02:35:22.185Z"
+    },
+    "version": "1.0"
+  }
+}
